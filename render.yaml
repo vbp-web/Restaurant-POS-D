@@ -1,0 +1,44 @@
+services:
+  - type: web
+    name: restaurant-pos-backend
+    env: node
+    region: singapore
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRE
+        value: 7d
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: ROOT_ADMIN_EMAIL
+        sync: false
+      - key: ROOT_ADMIN_PASSWORD
+        sync: false
+      - key: MAX_FILE_SIZE
+        value: 5242880
+      - key: RATE_LIMIT_MAX
+        value: 100
+      - key: RATE_LIMIT_WINDOW
+        value: 900000
+      - key: HTTPS_ONLY
+        value: true
+      - key: COOKIE_SECURE
+        value: true
+      - key: COOKIE_HTTPONLY
+        value: true
+      - key: COOKIE_SAMESITE
+        value: strict
+      - key: LOG_LEVEL
+        value: info
