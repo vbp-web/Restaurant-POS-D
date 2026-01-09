@@ -362,6 +362,10 @@ subscriptionSchema.methods.resetMonthlyUsage = function () {
 subscriptionSchema.methods.upgradePlan = function (newPlan) {
     this.plan = newPlan;
     this.setPlanDetails();
+    
+    // Explicitly mark nested objects as modified for Mongoose
+    this.markModified('features');
+    this.markModified('limits');
 
     // Handle free_trial specially
     if (newPlan === 'free_trial') {
