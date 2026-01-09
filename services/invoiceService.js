@@ -13,11 +13,17 @@ class InvoiceService {
         const month = String(new Date().getMonth() + 1).padStart(2, '0');
         const startOfMonth = new Date(year, new Date().getMonth(), 1);
 
-        // Try to find a unique invoice number
-        let sequence = 1;
+        // Get the count of existing invoices this month for this restaurant
+        const count = await Invoice.countDocuments({
+            restaurantId,
+            createdAt: { $gte: startOfMonth }
+        });
+
+        // Start from count + 1 to avoid checking all previous numbers
+        let sequence = count + 1;
         let invoiceNumber;
         let attempts = 0;
-        const maxAttempts = 100; // Prevent infinite loop
+        const maxAttempts = 20; // Prevent infinite loop
 
         while (attempts < maxAttempts) {
             // Generate invoice number with current sequence
