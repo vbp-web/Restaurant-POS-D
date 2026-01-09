@@ -149,6 +149,17 @@ exports.getAllPendingProofs = async (req, res) => {
     }
 };
 
+// Helper function to convert plan names from PaymentProof format to Subscription format
+const convertPlanName = (planName) => {
+    const planMapping = {
+        'FREE': 'free_trial',
+        'BASIC': 'basic',
+        'PROFESSIONAL': 'professional',
+        'ENTERPRISE': 'enterprise'
+    };
+    return planMapping[planName] || planName.toLowerCase();
+};
+
 // Admin: Verify payment proof
 exports.verifyPaymentProof = async (req, res) => {
     try {
@@ -179,16 +190,22 @@ exports.verifyPaymentProof = async (req, res) => {
         if (notes) proof.notes = notes;
         await proof.save();
 
+        // Convert plan name to lowercase format expected by Subscription model
+        const subscriptionPlanName = convertPlanName(proof.plan);
+
+        console.log('🔄 Converting plan name:', proof.plan, '→', subscriptionPlanName);
+
         // Upgrade the restaurant's subscription
         try {
             await SubscriptionService.upgradePlan(
                 proof.restaurant,
-                proof.plan,
+                subscriptionPlanName,
                 {
                     amount: proof.amount,
                     transactionId: proof.transactionId,
-                    method: 'UPI',
-                    status: 'success'
+                    paymentMethod: 'UPI',
+                    status: 'success',
+                    paidAt: new Date()
                 }
             );
 
@@ -201,8 +218,8 @@ exports.verifyPaymentProof = async (req, res) => {
                 paymentMethod: 'UPI',
                 transactionId: proof.transactionId,
                 paymentProof: proof._id,
-                plan: proof.plan,
-                description: `Subscription upgrade to ${proof.plan} plan`,
+                plan: subscriptionPlanName,
+                description: `Subscription upgrade to ${subscriptionPlanName} plan`,
                 processedBy: adminId
             });
         } catch (upgradeError) {
