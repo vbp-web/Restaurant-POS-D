@@ -1,44 +1,37 @@
-// Script to drop the incorrect global unique index on invoiceNumber
+// Nuclear Fix - Wipes all indexes to clear hidden rules
 require('dotenv').config();
 const mongoose = require('mongoose');
 
-async function fixInvoiceIndexes() {
+async function nuclearFix() {
     try {
         console.log('🚀 Connecting to MongoDB...');
         await mongoose.connect(process.env.MONGODB_URI);
-        console.log('✅ Connected to MongoDB');
-
         const db = mongoose.connection.db;
-        const collection = db.collection('invoices');
+        console.log('✅ Connected to Database:', mongoose.connection.name);
 
-        console.log('🔍 Checking existing indexes...');
-        const indexes = await collection.indexes();
-        console.log('Current indexes:', JSON.stringify(indexes, null, 2));
+        const colName = 'invoices';
+        const collection = db.collection(colName);
 
-        // Find the index that is just { invoiceNumber: 1 } and is unique
-        const globalUniqueIndex = indexes.find(idx =>
-            idx.key.invoiceNumber === 1 &&
-            Object.keys(idx.key).length === 1 &&
-            idx.unique === true
-        );
+        console.log(`\n🧹 Wiping all indexes from "${colName}"...`);
 
-        if (globalUniqueIndex) {
-            console.log(`🗑️  Dropping global unique index: ${globalUniqueIndex.name}...`);
-            await collection.dropIndex(globalUniqueIndex.name);
-            console.log('✅ Global unique index dropped successfully!');
-        } else {
-            console.log('ℹ️  Global unique index not found or already dropped.');
+        // This drops everything except the default _id index
+        try {
+            await collection.dropIndexes();
+            console.log('✅ ALL INDEXES DROPPED!');
+        } catch (e) {
+            console.log('❌ Error dropping indexes:', e.message);
         }
 
-        console.log('✨ Now the database will allow multiple restaurants to have the same invoice numbers!');
+        console.log('\n✨ Database is now clean.');
+        console.log('🚀 IMPORTANT: Now go to Render and RESTART the server.');
+        console.log('Mongoose will automatically create the correct NEW rules.');
 
         await mongoose.disconnect();
-        console.log('👋 Disconnected from MongoDB');
         process.exit(0);
     } catch (error) {
-        console.error('❌ Error fixing indexes:', error);
+        console.error('❌ Critical Error:', error);
         process.exit(1);
     }
 }
 
-fixInvoiceIndexes();
+nuclearFix();
