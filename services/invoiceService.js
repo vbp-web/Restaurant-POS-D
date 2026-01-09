@@ -125,87 +125,104 @@ class InvoiceService {
      * Create invoice from order
      */
     static async createInvoice(orderId, restaurantId, invoiceData = {}) {
-        try {
-            // Get order details
-            const order = await Order.findOne({ _id: orderId, restaurantId })
-                .populate('items.menuItemId', 'name');
+        const maxRetries = 5;
+        let lastError;
 
-            if (!order) {
-                throw new Error('Order not found');
-            }
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+            try {
+                // Get order details
+                const order = await Order.findOne({ _id: orderId, restaurantId })
+                    .populate('items.menuItemId', 'name');
 
-            // Get restaurant details
-            const restaurant = await Restaurant.findById(restaurantId);
-            if (!restaurant) {
-                throw new Error('Restaurant not found');
-            }
+                if (!order) {
+                    throw new Error('Order not found');
+                }
 
-            // Generate invoice number
-            const invoiceNumber = await this.generateInvoiceNumber(restaurantId);
+                // Get restaurant details
+                const restaurant = await Restaurant.findById(restaurantId);
+                if (!restaurant) {
+                    throw new Error('Restaurant not found');
+                }
 
-            // Prepare items
-            const items = order.items.map(item => ({
-                name: item.name || item.menuItemId?.name || 'Unknown Item',
-                quantity: item.quantity,
-                price: item.price,
-                amount: item.price * item.quantity,
-                hsnCode: '996331'
-            }));
+                // Generate invoice number
+                const invoiceNumber = await this.generateInvoiceNumber(restaurantId);
 
-            // Calculate subtotal
-            const subtotal = items.reduce((sum, item) => sum + item.amount, 0);
+                // Prepare items
+                const items = order.items.map(item => ({
+                    name: item.name || item.menuItemId?.name || 'Unknown Item',
+                    quantity: item.quantity,
+                    price: item.price,
+                    amount: item.price * item.quantity,
+                    hsnCode: '996331'
+                }));
 
-            // Calculate taxes
-            const calculations = this.calculateTaxes(
-                subtotal,
-                invoiceData.discount || 0,
-                invoiceData.discountPercentage || 0,
-                invoiceData.isInterState || false
-            );
+                // Calculate subtotal
+                const subtotal = items.reduce((sum, item) => sum + item.amount, 0);
 
-            // Generate UPI QR Code if UPI ID provided
-            let qrCodeData = '';
-            if (invoiceData.upiId) {
-                qrCodeData = await this.generateUPIQRCode(
-                    invoiceData.upiId,
-                    calculations.grandTotal,
-                    restaurant.name
+                // Calculate taxes
+                const calculations = this.calculateTaxes(
+                    subtotal,
+                    invoiceData.discount || 0,
+                    invoiceData.discountPercentage || 0,
+                    invoiceData.isInterState || false
                 );
+
+                // Generate UPI QR Code if UPI ID provided
+                let qrCodeData = '';
+                if (invoiceData.upiId) {
+                    qrCodeData = await this.generateUPIQRCode(
+                        invoiceData.upiId,
+                        calculations.grandTotal,
+                        restaurant.name
+                    );
+                }
+
+                // Create invoice
+                const invoice = await Invoice.create({
+                    restaurantId,
+                    orderId,
+                    invoiceNumber,
+                    customerName: invoiceData.customerName || 'Walk-in Customer',
+                    customerPhone: invoiceData.customerPhone || '',
+                    customerEmail: invoiceData.customerEmail || '',
+                    customerGSTIN: invoiceData.customerGSTIN || '',
+                    restaurantDetails: {
+                        name: restaurant.name,
+                        address: restaurant.address,
+                        phone: restaurant.phone,
+                        email: restaurant.email,
+                        gstNumber: invoiceData.restaurantGSTNumber || '',
+                        logo: invoiceData.restaurantLogo || ''
+                    },
+                    items,
+                    tableNumber: order.tableNumber,
+                    ...calculations,
+                    paymentMethod: invoiceData.paymentMethod || 'PENDING',
+                    paymentStatus: invoiceData.paymentStatus || 'UNPAID',
+                    paidAmount: invoiceData.paidAmount || 0,
+                    upiId: invoiceData.upiId || '',
+                    qrCodeData,
+                    notes: invoiceData.notes || '',
+                    termsAndConditions: invoiceData.termsAndConditions || 'Thank you for your business! Please visit again.'
+                });
+
+                return invoice;
+            } catch (error) {
+                // Check if it's a duplicate key error
+                if (error.code === 11000 && error.keyPattern?.invoiceNumber) {
+                    console.log(`Duplicate invoice number detected, retrying... (Attempt ${attempt + 1}/${maxRetries})`);
+                    lastError = error;
+                    // Wait a tiny bit before retrying to avoid race conditions
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    continue; // Retry with a new invoice number
+                }
+                // If it's not a duplicate error, throw immediately
+                throw error;
             }
-
-            // Create invoice
-            const invoice = await Invoice.create({
-                restaurantId,
-                orderId,
-                invoiceNumber,
-                customerName: invoiceData.customerName || 'Walk-in Customer',
-                customerPhone: invoiceData.customerPhone || '',
-                customerEmail: invoiceData.customerEmail || '',
-                customerGSTIN: invoiceData.customerGSTIN || '',
-                restaurantDetails: {
-                    name: restaurant.name,
-                    address: restaurant.address,
-                    phone: restaurant.phone,
-                    email: restaurant.email,
-                    gstNumber: invoiceData.restaurantGSTNumber || '',
-                    logo: invoiceData.restaurantLogo || ''
-                },
-                items,
-                tableNumber: order.tableNumber,
-                ...calculations,
-                paymentMethod: invoiceData.paymentMethod || 'PENDING',
-                paymentStatus: invoiceData.paymentStatus || 'UNPAID',
-                paidAmount: invoiceData.paidAmount || 0,
-                upiId: invoiceData.upiId || '',
-                qrCodeData,
-                notes: invoiceData.notes || '',
-                termsAndConditions: invoiceData.termsAndConditions || 'Thank you for your business! Please visit again.'
-            });
-
-            return invoice;
-        } catch (error) {
-            throw error;
         }
+
+        // If we exhausted all retries, throw the last error
+        throw new Error(`Failed to create invoice after ${maxRetries} attempts: ${lastError.message}`);
     }
 
     /**
