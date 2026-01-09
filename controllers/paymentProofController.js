@@ -209,7 +209,7 @@ exports.verifyPaymentProof = async (req, res) => {
                 }
             );
 
-            // Create transaction record
+            // Create transaction record (use original uppercase plan name for Transaction model)
             await financialService.createTransaction({
                 restaurant: proof.restaurant,
                 type: 'SUBSCRIPTION',
@@ -218,8 +218,8 @@ exports.verifyPaymentProof = async (req, res) => {
                 paymentMethod: 'UPI',
                 transactionId: proof.transactionId,
                 paymentProof: proof._id,
-                plan: subscriptionPlanName,
-                description: `Subscription upgrade to ${subscriptionPlanName} plan`,
+                plan: proof.plan, // Use original uppercase plan name (PROFESSIONAL)
+                description: `Subscription upgrade to ${proof.plan} plan`,
                 processedBy: adminId
             });
         } catch (upgradeError) {
