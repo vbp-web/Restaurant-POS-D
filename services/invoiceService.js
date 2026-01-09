@@ -11,16 +11,38 @@ class InvoiceService {
     static async generateInvoiceNumber(restaurantId) {
         const year = new Date().getFullYear();
         const month = String(new Date().getMonth() + 1).padStart(2, '0');
-
-        // Count invoices for this restaurant this month
         const startOfMonth = new Date(year, new Date().getMonth(), 1);
-        const count = await Invoice.countDocuments({
-            restaurantId,
-            createdAt: { $gte: startOfMonth }
-        });
 
-        const sequence = String(count + 1).padStart(4, '0');
-        return `INV-${year}${month}-${sequence}`;
+        // Try to find a unique invoice number
+        let sequence = 1;
+        let invoiceNumber;
+        let attempts = 0;
+        const maxAttempts = 100; // Prevent infinite loop
+
+        while (attempts < maxAttempts) {
+            // Generate invoice number with current sequence
+            const sequenceStr = String(sequence).padStart(4, '0');
+            invoiceNumber = `INV-${year}${month}-${sequenceStr}`;
+
+            // Check if this invoice number already exists for this restaurant
+            const existing = await Invoice.findOne({
+                restaurantId,
+                invoiceNumber
+            });
+
+            if (!existing) {
+                // Found a unique number
+                return invoiceNumber;
+            }
+
+            // This number exists, try next sequence
+            sequence++;
+            attempts++;
+        }
+
+        // Fallback: use timestamp if we couldn't find a unique number
+        const timestamp = Date.now().toString().slice(-6);
+        return `INV-${year}${month}-${timestamp}`;
     }
 
     /**
