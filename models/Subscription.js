@@ -373,6 +373,8 @@ subscriptionSchema.methods.upgradePlan = function (newPlan) {
         this.currentPeriodStart = new Date();
         this.currentPeriodEnd = trialEnd;
     } else {
+        // For paid plans, ensure subscription is active
+        this.status = 'active';
         this.isTrialActive = false;
         this.currentPeriodStart = new Date();
         const endDate = new Date();
