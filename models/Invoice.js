@@ -14,8 +14,7 @@ const invoiceSchema = new mongoose.Schema({
     },
     invoiceNumber: {
         type: String,
-        required: true,
-        unique: true
+        required: true
     },
     // Customer Details
     customerName: {
@@ -162,8 +161,8 @@ invoiceSchema.pre('save', function (next) {
     next();
 });
 
-// Index for faster queries
-invoiceSchema.index({ restaurantId: 1, invoiceNumber: 1 });
+// Index for faster queries and uniqueness per restaurant
+invoiceSchema.index({ restaurantId: 1, invoiceNumber: 1 }, { unique: true });
 invoiceSchema.index({ restaurantId: 1, invoiceDate: -1 });
 
 module.exports = mongoose.model('Invoice', invoiceSchema);
